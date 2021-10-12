@@ -20,6 +20,7 @@ function main() {
             vertex_position: gl.getAttribLocation(shader_program, 'a_vertex_position'),
         },
         uniformLocations: {
+            time : gl.getUniformLocation(shader_program, 'u_time'),
             projection_matrix: gl.getUniformLocation(shader_program, 'u_projection_matrix'),
             model_view_matrix: gl.getUniformLocation(shader_program, 'u_model_view_matrix'),
         },
@@ -27,7 +28,17 @@ function main() {
 
     const buffers = initBuffers(gl);
 
-    drawScene(gl, program_info, buffers);
+    var then = 0.0;
+    function render(now) {
+        now *= 0.001; //convert to seconds
+        const delta_time = now - then;
+        then = now;
+
+        drawScene(gl, program_info, buffers, now);
+
+        requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
 }
 
 function initBuffers(gl) {
@@ -55,7 +66,7 @@ function initBuffers(gl) {
     };
 }
 
-function drawScene(gl, program_info, buffers) {
+function drawScene(gl, program_info, buffers, time) {
     gl.clearColor(0.0, 0.0, 0.0, 1.0); //clear to black
     gl.clearDepth(1.0); //clear everything
     gl.enable(gl.DEPTH_TEST);
@@ -107,6 +118,9 @@ function drawScene(gl, program_info, buffers) {
     gl.useProgram(program_info.program);
 
     //set shader uniforms
+    gl.uniform1f(program_info.uniformLocations.time,
+        time);
+
     gl.uniformMatrix4fv(
         program_info.uniformLocations.projection_matrix,
         false,
@@ -168,6 +182,7 @@ const vertex_shader_source = `
     attribute vec4 a_vertex_position;
     uniform mat4 u_model_view_matrix;
     uniform mat4 u_projection_matrix;
+    uniform float u_time;
 
     void main() {
         gl_Position = u_projection_matrix * u_model_view_matrix * a_vertex_position;
@@ -184,8 +199,12 @@ const sd_fragment_shader = `
 //based on lightbits' tutorial
 
 precision mediump float;
+
+const float PI = 3.141592653589;
+
 //uniform vec2 u_resolution;
 //uniform vec2 u_mouse_position;
+uniform float u_time;
 
 //tests if ray hit object
 bool rayMarch(vec3 ray_origin , vec3 ray_dir,
@@ -238,7 +257,7 @@ void main () {
 
   if (ray_hit) {
     vec3 ray_loc = ray_origin + ray_dir*dist_traveled;
-    color = (lambertLight(ray_loc, vec3(mouse_x, mouse_y, -2.0), vec3(0.5, 1.0, 1.0)) +
+    color = (lambertLight(ray_loc, vec3(mouse_x, sin(u_time*2.0*PI), -2.0), vec3(0.5, 1.0, 1.0)) +
       lambertLight(ray_loc, vec3(0.5, 0.5, 0.5), vec3(1.0, 0.5, 0.5)))/2.0;
   }
 
