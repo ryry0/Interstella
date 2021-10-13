@@ -222,10 +222,10 @@ float sdBox( vec3 p, vec3 b );
 
 void main () {
   //to generate perspective matrices
-  const vec3 cam_eye = vec3(1.5, 1.0, -2.0); //vec3(0, 0, -2);
-  const vec3 cam_forward = normalize(-cam_eye); //vec3(0, 0, 1);
-  const vec3 cam_right = normalize(cross(vec3(0, 1, 0), cam_forward)); //vec3(1, 0, 0);
-  const vec3 cam_up = normalize(cross(cam_forward, cam_right));//vec3(0, 1, 0);
+  vec3 cam_eye = vec3(sin(2.0*PI*0.1*u_time), 0.0, -2.0); //vec3(0, 0, -2);
+  vec3 cam_forward = normalize(-cam_eye);//normalize(-cam_eye); //vec3(0, 0, 1);
+  vec3 cam_right = normalize(cross(vec3(0, 1, 0), cam_forward)); //vec3(1, 0, 0);
+  vec3 cam_up = normalize(cross(cam_forward, cam_right));//vec3(0, 1, 0);
   const float focal_length = 2.0;
   const vec3 sky_color = vec3(0.31, 0.47, 0.67);
 
@@ -384,7 +384,7 @@ float mapScene(vec3 point) {
 
   float o1 = sdSphere(point + vec3 (-0.5, 0.2, 0.0), radius);
   float o2 =
-    udRoundBox(point + vec3 (0.5, 0.3, 0.0), vec3(0.25, 0.25, 0.25), 0.05);
+    udRoundBox(point + vec3 (cos(2.0*PI*1.0*u_time), 0.3, 0.0), vec3(0.25, 0.25, 0.25), 0.05);
   float o3 = sdPlane(point + vec3(0.0, -0.1, 0.0), vec4(0.0, 1.0, 0.0, 1.0));
   return min(min(o1, o2), o3);;
 }
