@@ -1,4 +1,4 @@
-import {vertex_shader_source, sd_fragment_shader} from './modules/basic.js';
+import {vertex_shader_source, texture_fragment_shader_source, sd_fragment_shader} from './modules/basic.js';
 
 function main() {
     const canvas = document.querySelector("#glCanvas");
@@ -11,7 +11,7 @@ function main() {
         return;
     }
 
-    const shader_program = initShaderProgram(gl, vertex_shader_source, sd_fragment_shader);
+    const shader_program = initShaderProgram(gl, vertex_shader_source, texture_fragment_shader_source);
 
     //collect all the info needed to use the shader program
 
@@ -24,10 +24,12 @@ function main() {
             time : gl.getUniformLocation(shader_program, 'u_time'),
             projection_matrix: gl.getUniformLocation(shader_program, 'u_projection_matrix'),
             model_view_matrix: gl.getUniformLocation(shader_program, 'u_model_view_matrix'),
+            sampler: gl.getUniformLocation(shader_program, 'u_sampler'),
         },
     };
 
     const buffers = initBuffers(gl);
+    const texture = loadTexture(gl, 'milky-way.jpg');
 
     var then = 0.0;
     function render(now) {
@@ -35,7 +37,7 @@ function main() {
         const delta_time = now - then;
         then = now;
 
-        drawScene(gl, program_info, buffers, now);
+        drawScene(gl, program_info, buffers, texture, now);
 
         requestAnimationFrame(render);
     }
@@ -67,7 +69,7 @@ function initBuffers(gl) {
     };
 }
 
-function drawScene(gl, program_info, buffers, time) {
+function drawScene(gl, program_info, buffers, texture, time) {
     gl.clearColor(0.0, 0.0, 0.0, 1.0); //clear to black
     gl.clearDepth(1.0); //clear everything
     gl.enable(gl.DEPTH_TEST);
@@ -130,6 +132,11 @@ function drawScene(gl, program_info, buffers, time) {
         program_info.uniformLocations.model_view_matrix,
         false,
         model_view_matrix);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(program_info.uniformLocations.u_sampler, 0);
+
     {
         const offset = 0;
         const vertex_count = 4;
@@ -178,5 +185,44 @@ function loadShader(gl, type, source) {
     return shader;
 }
 
+function loadTexture(gl, url) {
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+
+    //put a single pixel as placeholder until ready.
+    const level = 0;
+    const internal_format = gl.RGBA;
+    const width = 1;
+    const height = 1;
+    const border = 0;
+    const src_format = gl.RGBA;
+    const src_type = gl.UNSIGNED_BYTE;
+    const pixel = new Uint8Array([0, 0, 255, 255]);
+    gl.texImage2D(gl.TEXTURE_2D, level, internal_format, width, height,
+        border, src_format, src_type, pixel);
+
+    const image = new Image();
+    image.onload = function() {
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, level, internal_format,
+            src_format, src_type, image);
+
+        //check if power of 2
+        if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
+            gl.generateMipmap(gl.TEXTURE_2D);
+        } else {
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+        }
+    };
+    image.src = url;
+    return texture;
+}
+
+function isPowerOf2(value) {
+    return (value & (value - 1)) == 0;
+}
 
 window.onload = main;
