@@ -34,7 +34,7 @@ uniform float u_time;
 
 //tests if ray hit object
 bool rayMarch(vec3 ray_origin , vec3 ray_dir,
-  out int num_iter , out float dist_traveled);
+  out int num_iter , out float dist_traveled, out float material);
 
 vec3 compNormal(vec3 point);
 vec3 lambertLight(vec3 point, vec3 light_pos, vec3 light_color);
@@ -43,8 +43,9 @@ vec3 applyFog( vec3 orig_color, vec3 fog_color, float distance );
 vec4 trimap(sampler2D s, vec3 p, vec3 n, float k);
 vec3 periodize(vec3 p);
 vec3 skybox(vec3 p);
+vec2 opU(vec2 d1, vec2 d2);
 
-float mapScene(vec3 point); //function that fully describes scene in distance
+vec2 mapScene(vec3 point); //function that fully describes scene in distance
 float sdSphere ( vec3 point, float radius );
 float sdPlane (vec3 point, vec4 normal);
 float sdBox( vec3 p, vec3 b );
@@ -53,7 +54,7 @@ void main () {
   //to generate perspective matrices
   ///*2.0*PI*0.1*u_time)*/
   float f = 0.1;
-  vec3 cam_eye = vec3(0.7, 1.2, -1.0); //vec3(0, 0, -2);
+  vec3 cam_eye = vec3(3.0, 5.0, -1.0); //vec3(0, 0, -2);
   vec3 cam_forward = vec3(0, 0, 1);
   vec3 cam_right = normalize(cross(vec3(0, 1, 0), cam_forward)); //vec3(1, 0, 0);
   vec3 cam_up = normalize(cross(cam_forward, cam_right));//vec3(0, 1, 0);
@@ -71,15 +72,21 @@ void main () {
   int num_iter; //number of iterations to hit an object
   float dist_traveled; //distance ray has gone to hit object
   bool ray_hit;
+  float material;
 
   //determine distance and num_iter
-  ray_hit = rayMarch(ray_origin, ray_dir, num_iter, dist_traveled);
+  ray_hit = rayMarch(ray_origin, ray_dir, num_iter, dist_traveled, material);
 
   vec3 color = sky_color;
 
   if (ray_hit) {
     vec3 ray_loc = ray_origin + ray_dir*dist_traveled;
-    color = skybox(ray_loc);
+    if (material == 1.0)
+      color = vec3(0.0, 0.0, 0.0);
+    else if (material == 0.0)
+      color = vec3(0.0, 1.0, 0.0);
+    else
+      color = skybox(ray_loc);
   }
 
   //color = applyFog(color, sky_color, dist_traveled);
@@ -89,7 +96,7 @@ void main () {
 
 vec3 skybox(vec3 p) {
   vec3 color = vec3(0.0, 0.0, 0.0);
-  color = trimap(u_sampler, periodize(p/1.3), compNormal(p), 8.0).xyz;
+  color = trimap(u_sampler, periodize(p/6.0), compNormal(p), 8.0).xyz;
   color = color*color;
   color *= 1.1;
 
@@ -99,7 +106,8 @@ vec3 skybox(vec3 p) {
 bool rayMarch(vec3 ray_origin
              , vec3 ray_dir
              , out int num_iter
-             , out float dist_traveled) {
+             , out float dist_traveled
+             , out float material) {
 
   const float epsilon = 0.001;
   const float z_far_limit = 30.0;
@@ -107,12 +115,14 @@ bool rayMarch(vec3 ray_origin
   bool hit = false;
 
   dist_traveled = 0.0;
+  material = 0.0;
 
   for(int i = 0; i < max_steps; ++i) {
-    float dist_to_object = mapScene(ray_origin + ray_dir*dist_traveled);
+    vec2 dist_to_object = mapScene(ray_origin + ray_dir*dist_traveled);
 
-    if (dist_to_object < epsilon) {
+    if (dist_to_object.x < epsilon) {
       hit = true;
+      material = dist_to_object.y;
       break;
     }
     else if (dist_traveled > z_far_limit) {
@@ -120,7 +130,7 @@ bool rayMarch(vec3 ray_origin
       break;
     }
 
-    dist_traveled+=dist_to_object;
+    dist_traveled+=dist_to_object.x;
     num_iter = i;
   } //end for
 
@@ -131,9 +141,9 @@ bool rayMarch(vec3 ray_origin
 vec3 compNormal(vec3 point) {
   float delta = 0.0001;
 
-  float dx = mapScene(point + vec3(delta, 0.0, 0.0)) - mapScene(point - vec3(delta, 0.0, 0.0));
-  float dy = mapScene(point + vec3(0.0, delta, 0.0)) - mapScene(point - vec3(0.0, delta, 0.0));
-  float dz = mapScene(point + vec3(0.0, 0.0, delta)) - mapScene(point - vec3(0.0, 0.0, delta));
+  float dx = mapScene(point + vec3(delta, 0.0, 0.0)).x - mapScene(point - vec3(delta, 0.0, 0.0)).x;
+  float dy = mapScene(point + vec3(0.0, delta, 0.0)).x - mapScene(point - vec3(0.0, delta, 0.0)).x;
+  float dz = mapScene(point + vec3(0.0, 0.0, delta)).x - mapScene(point - vec3(0.0, 0.0, delta)).x;
   return normalize(vec3(dx, dy, dz));
 }
 
@@ -167,7 +177,7 @@ float castShadow(vec3 point, vec3 light_pos, float shadow_intensity) {
   float dist_traveled = 10.0 * epsilon;
 
   for (int i = 0; i < max_steps; i++) {
-    float dist = mapScene(point + ray_dir*dist_traveled);
+    float dist = mapScene(point + ray_dir*dist_traveled).x;
 
     //we hit a surface before we hit light
     if (dist < epsilon) {
@@ -198,13 +208,19 @@ float sdPlane (vec3 point, vec4 normal) {
   return dot(point, normal.xyz) + normal.w;
 }
 //function that fully describes the scene in distances
-float mapScene(vec3 point) {
+vec2 mapScene(vec3 point) {
   const float radius = 0.5;
 
-  float o1 = sdSphere(point, radius);
-  float o2 = sdPlane(point + vec3(0.0, -0.1, 0.0), vec4(0.0, 0.0, -1.0, 1.0));
-  //return min(o1, o2);
-  return o2;
+  vec2 o1 = vec2(sdSphere(point + vec3(-5.0, -5.0, -5.0), radius), 1.0);
+  vec2 o2 = vec2(sdPlane(point + vec3(0.0, -0.1, 0.0), vec4(0.0, 0.0, -1.0, 10.0)), 2.0);
+  vec2 res = opU(o1, o2);
+  return res;
+}
+
+//x is distance
+//y is color instance
+vec2 opU(vec2 d1, vec2 d2) {
+  return (d1.x < d2.x)? d1 : d2;
 }
 
 vec3 periodize(vec3 p) {
