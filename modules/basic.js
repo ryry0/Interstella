@@ -42,6 +42,7 @@ float castShadow(vec3 point, vec3 light_pos, float shadow_intensity);
 vec3 applyFog( vec3 orig_color, vec3 fog_color, float distance );
 vec4 trimap(sampler2D s, vec3 p, vec3 n, float k);
 vec3 periodize(vec3 p);
+vec3 skybox(vec3 p);
 
 float mapScene(vec3 point); //function that fully describes scene in distance
 float sdSphere ( vec3 point, float radius );
@@ -51,8 +52,9 @@ float sdBox( vec3 p, vec3 b );
 void main () {
   //to generate perspective matrices
   ///*2.0*PI*0.1*u_time)*/
-  vec3 cam_eye = vec3(0.0, 0.0, -2.0); //vec3(0, 0, -2);
-  vec3 cam_forward = normalize(-cam_eye); //vec3(0, 0, 1);
+  float f = 0.1;
+  vec3 cam_eye = vec3(0.7, 1.2, -1.0); //vec3(0, 0, -2);
+  vec3 cam_forward = vec3(0, 0, 1);
   vec3 cam_right = normalize(cross(vec3(0, 1, 0), cam_forward)); //vec3(1, 0, 0);
   vec3 cam_up = normalize(cross(cam_forward, cam_right));//vec3(0, 1, 0);
   const float focal_length = 2.0;
@@ -77,19 +79,22 @@ void main () {
 
   if (ray_hit) {
     vec3 ray_loc = ray_origin + ray_dir*dist_traveled;
-    color = trimap(u_sampler, periodize(ray_loc), compNormal(ray_loc), 8.0).xyz;
-    color = color*color;
-    color *= 2.0;
-    color = sqrt(color);
-    /*
-    color = (lambertLight(ray_loc, vec3(mouse_x, sin(u_time*2.0*PI), -2.0), vec3(0.5, 1.0, 1.0)) +
-      lambertLight(ray_loc, vec3(0.5, 0.5, 0.5), vec3(1.0, 0.5, 0.5)))/2.0;
-      */
+    color = skybox(ray_loc);
   }
 
-  color = applyFog(color, sky_color, dist_traveled);
+  //color = applyFog(color, sky_color, dist_traveled);
   gl_FragColor = vec4(color, 1.0);
 } //end main
+
+
+vec3 skybox(vec3 p) {
+  vec3 color = vec3(0.0, 0.0, 0.0);
+  color = trimap(u_sampler, periodize(p/1.3), compNormal(p), 8.0).xyz;
+  color = color*color;
+  color *= 1.1;
+
+  return color;
+}
 
 bool rayMarch(vec3 ray_origin
              , vec3 ray_dir
@@ -197,8 +202,9 @@ float mapScene(vec3 point) {
   const float radius = 0.5;
 
   float o1 = sdSphere(point, radius);
-  float o2 = sdPlane(point + vec3(0.0, -0.1, 0.0), vec4(0.0, 1.0, 0.0, 1.0));
-  return min(o1, o2);
+  float o2 = sdPlane(point + vec3(0.0, -0.1, 0.0), vec4(0.0, 0.0, -1.0, 1.0));
+  //return min(o1, o2);
+  return o2;
 }
 
 vec3 periodize(vec3 p) {
