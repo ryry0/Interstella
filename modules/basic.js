@@ -27,6 +27,7 @@ export const texture_fragment_shader_source = `
 precision mediump float;
 
 const float PI = 3.141592653589;
+const vec3 black_hole_position = vec3(-5.0, -5.0, -5.0);
 
 varying highp vec2 vTextureCord;
 uniform sampler2D u_sampler;
@@ -54,7 +55,7 @@ void main () {
   //to generate perspective matrices
   ///*2.0*PI*0.1*u_time)*/
   float f = 0.1;
-  vec3 cam_eye = vec3(3.0, 5.0, -1.0); //vec3(0, 0, -2);
+  vec3 cam_eye = vec3(3.0, 5.0, -10.0); //vec3(0, 0, -2);
   vec3 cam_forward = vec3(0, 0, 1);
   vec3 cam_right = normalize(cross(vec3(0, 1, 0), cam_forward)); //vec3(1, 0, 0);
   vec3 cam_up = normalize(cross(cam_forward, cam_right));//vec3(0, 1, 0);
@@ -85,6 +86,8 @@ void main () {
       color = vec3(0.0, 0.0, 0.0);
     else if (material == 0.0)
       color = vec3(0.0, 1.0, 0.0);
+    else if (material == 4.0)
+      color = vec3(1.0, 1.0, 1.0);
     else
       color = skybox(ray_loc);
   }
@@ -111,14 +114,22 @@ bool rayMarch(vec3 ray_origin
 
   const float epsilon = 0.001;
   const float z_far_limit = 30.0;
-  const int max_steps = 64;
+  const int max_steps = 5000;
+  const float step_size = 0.1;
   bool hit = false;
+  float G_M1_M2 = 10.0*sin(2.0*PI*0.1*u_time);
 
   dist_traveled = 0.0;
   material = 0.0;
+  vec3 current_ray = ray_origin;
+  vec3 current_ray_dir = ray_dir;
 
   for(int i = 0; i < max_steps; ++i) {
-    vec2 dist_to_object = mapScene(ray_origin + ray_dir*dist_traveled);
+    vec3 black_hole_to_current_ray = current_ray - black_hole_position;
+    float black_hole_distance = dot(black_hole_to_current_ray,
+        black_hole_to_current_ray);
+
+    vec2 dist_to_object = mapScene(current_ray);
 
     if (dist_to_object.x < epsilon) {
       hit = true;
@@ -130,7 +141,10 @@ bool rayMarch(vec3 ray_origin
       break;
     }
 
-    dist_traveled+=dist_to_object.x;
+    dist_traveled += step_size;//dist_to_object.x;
+    vec3 gravity_vec = normalize(-black_hole_to_current_ray)*(G_M1_M2/black_hole_distance);
+    current_ray_dir = normalize( current_ray_dir + step_size*vec3(gravity_vec.xy, 0.0));
+    current_ray = current_ray + current_ray_dir*step_size;
     num_iter = i;
   } //end for
 
@@ -211,9 +225,10 @@ float sdPlane (vec3 point, vec4 normal) {
 vec2 mapScene(vec3 point) {
   const float radius = 0.5;
 
-  vec2 o1 = vec2(sdSphere(point + vec3(-5.0, -5.0, -5.0), radius), 1.0);
+  vec2 o1 = vec2(sdSphere(point + black_hole_position, radius), 1.0);
   vec2 o2 = vec2(sdPlane(point + vec3(0.0, -0.1, 0.0), vec4(0.0, 0.0, -1.0, 10.0)), 2.0);
-  vec2 res = opU(o1, o2);
+  vec2 o3 = vec2(sdSphere(point + black_hole_position - vec3(0.0, -3.0, 0.0), radius), 0.5);
+  vec2 res = opU(opU(o1, o2), o3);
   return res;
 }
 
